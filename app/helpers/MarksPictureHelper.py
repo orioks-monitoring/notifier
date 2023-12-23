@@ -8,14 +8,12 @@ import secrets
 from app import config
 from app.helpers.AssetsHelper import assetsHelper
 
-from app.helpers import CommonHelper
+from app.helpers.CommonHelper import CommonHelper
 
 
 class MarksPictureHelper:
     def __init__(self):
-        self._font_path = assetsHelper.make_full_path(
-            'fonts/PTSansCaption-Bold.ttf'
-        )
+        self._font_path = assetsHelper.make_full_path('fonts/PTSansCaption-Bold.ttf')
         self._font_upper_size = 64
         self._font_downer_size = 62
 
@@ -41,25 +39,15 @@ class MarksPictureHelper:
 
     def _get_image_by_grade(self, current_grade, max_grade):
         if current_grade == 0:
-            self.image = Image.open(
-                assetsHelper.make_full_path('images/red.png')
-            )
+            self.image = Image.open(assetsHelper.make_full_path('images/red.png'))
         elif current_grade / max_grade < 0.5:
-            self.image = Image.open(
-                assetsHelper.make_full_path('images/orange.png')
-            )
+            self.image = Image.open(assetsHelper.make_full_path('images/orange.png'))
         elif current_grade / max_grade < 0.7:
-            self.image = Image.open(
-                assetsHelper.make_full_path('images/yellow.png')
-            )
+            self.image = Image.open(assetsHelper.make_full_path('images/yellow.png'))
         elif current_grade / max_grade < 0.85:
-            self.image = Image.open(
-                assetsHelper.make_full_path('images/salt.png')
-            )
+            self.image = Image.open(assetsHelper.make_full_path('images/salt.png'))
         elif current_grade / max_grade >= 0.85:
-            self.image = Image.open(
-                assetsHelper.make_full_path('images/green.png')
-            )
+            self.image = Image.open(assetsHelper.make_full_path('images/green.png'))
         self.draw_text = ImageDraw.Draw(self.image)
         self.image_weight, self.image_height = self.image.size
 
@@ -101,9 +89,7 @@ class MarksPictureHelper:
             ):
                 container_height += self._font_upper.getsize(line)[1]
 
-            container_height += (
-                self._font_upper.getsize(mark_change_text)[1] / 2
-            )
+            container_height += self._font_upper.getsize(mark_change_text)[1] / 2
 
         if need_qr:
             container_height += self._font_upper.getsize(side_text)[1] / 2
@@ -121,9 +107,7 @@ class MarksPictureHelper:
         qr.add_data(url)
         qr.make(fit=True)
         img = qr.make_image(fill_color='#008CBA', back_color='white')
-        self.image.paste(
-            img, ((self.image_weight - img.pixel_size) // 2, int(offset))
-        )
+        self.image.paste(img, ((self.image_weight - img.pixel_size) // 2, int(offset)))
 
     def _draw_text(self, text, font, fill, offset, need_split=True):
         width_to_split = self._width_line
@@ -132,10 +116,7 @@ class MarksPictureHelper:
         for line in textwrap.wrap(text, width=width_to_split):
             self.draw_text.text(
                 (
-                    (
-                        self.image_weight
-                        - self.draw_text.textsize(line, font=font)[0]
-                    )
+                    (self.image_weight - self.draw_text.textsize(line, font=font)[0])
                     / 2,
                     (self.image_height - self.container_height) / 2 + offset,
                 ),
@@ -148,9 +129,7 @@ class MarksPictureHelper:
 
     def _draw_text_news(self, title_text, side_text, url):
         offset = 0
-        offset = self._draw_text(
-            title_text, self._font_upper, self._fill_upper, offset
-        )
+        offset = self._draw_text(title_text, self._font_upper, self._fill_upper, offset)
         offset += self._font_upper.getsize(title_text)[1] / 4
         offset = self._draw_text(
             side_text, self._font_downer, self._fill_downer, offset
@@ -165,9 +144,7 @@ class MarksPictureHelper:
         side_text,
     ):
         offset = 0
-        offset = self._draw_text(
-            title_text, self._font_upper, self._fill_upper, offset
-        )
+        offset = self._draw_text(title_text, self._font_upper, self._fill_upper, offset)
         offset += self._font_upper.getsize(title_text)[1] / 4
         offset = self._draw_text(
             mark_change_text,
@@ -177,9 +154,7 @@ class MarksPictureHelper:
             need_split=False,
         )
         offset += self._font_upper.getsize(title_text)[1] / 4
-        self._draw_text(
-            side_text, self._font_downer, self._fill_downer, offset
-        )
+        self._draw_text(side_text, self._font_downer, self._fill_downer, offset)
 
     def _calculate_font_size_and_text_width(
         self,
@@ -244,9 +219,7 @@ class MarksPictureHelper:
         self.image.save(self.image_path)
         return self.image_path
 
-    def get_image_news(
-        self, title_text: str, side_text: str, url: str
-    ) -> pathlib.Path:
+    def get_image_news(self, title_text: str, side_text: str, url: str) -> pathlib.Path:
         self.image_path = pathlib.Path(
             os.path.join(config.BASEDIR, f'temp_{secrets.token_hex(15)}.png')
         )
@@ -254,9 +227,7 @@ class MarksPictureHelper:
         if title_text == '':
             self.image.save(self.image_path)
             return self.image_path
-        self._calculate_font_size_and_text_width(
-            title_text, side_text, need_qr=True
-        )
+        self._calculate_font_size_and_text_width(title_text, side_text, need_qr=True)
         self._draw_text_news(title_text, side_text, url)
         self.image.save(self.image_path)
         return self.image_path

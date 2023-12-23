@@ -19,9 +19,3 @@ class CommonHelper:
             os.remove(path)
         except FileNotFoundError:
             pass
-
-    @staticmethod
-    def print_traceback(exception: Exception) -> None:
-        traceback.print_exception(
-            type(exception), exception, exception.__traceback__
-        )
