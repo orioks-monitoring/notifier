@@ -1,15 +1,23 @@
 import asyncio
+import logging
 from typing import NoReturn
 
 from aiogram import Bot, types
+from prometheus_client import start_http_server
 
 from app import config
 from app.Consumer.NotifyConsumer import NotifyConsumer
+from app.logging import setup_logging
 
+logger = logging.getLogger(__name__)
 
-bot = Bot(token=config.TELEGRAM_BOT_API_TOKEN, parse_mode=types.ParseMode.HTML)
+bot = Bot(
+    token=config.TELEGRAM_BOT_API_TOKEN,
+    parse_mode=types.ParseMode.HTML,
+)
 logs_bot = Bot(
-    token=config.TELEGRAM_LOGS_BOT_API_TOKEN, parse_mode=types.ParseMode.HTML
+    token=config.TELEGRAM_LOGS_BOT_API_TOKEN,
+    parse_mode=types.ParseMode.HTML,
 )
 
 queue_connection = None
@@ -27,15 +35,12 @@ async def initialize_queue_connection() -> None:
     )
 
 
-def initialize_assets() -> None:
-    from app.helpers.AssetsHelper import assetsHelper
-
-    assetsHelper.initialize(f'{config.BASEDIR}/assets')
-
-
 async def run() -> NoReturn:
+    setup_logging()
     await initialize_queue_connection()
-    initialize_assets()
+    logger.info("Starting metrics server...")
+    start_http_server(port=8880)
+    logger.info("Metrics server started.")
 
     await NotifyConsumer.receive()
 

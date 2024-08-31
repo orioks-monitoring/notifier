@@ -1,36 +1,34 @@
 import textwrap
-import os
-import qrcode as qrcode
+from io import BytesIO
+from typing import Self
+
 from PIL import Image, ImageDraw, ImageFont
-import pathlib
-import secrets
+from qrcode.constants import ERROR_CORRECT_L
+from qrcode.main import QRCode
 
 from app import config
-from app.helpers.AssetsHelper import assetsHelper
-
-from app.helpers.CommonHelper import CommonHelper
+from app.helpers.PicturesCacheHelpler import weak_lru
 
 
 class MarksPictureHelper:
     def __init__(self):
-        self._font_path = assetsHelper.make_full_path('fonts/PTSansCaption-Bold.ttf')
+        self._font_path = config.ASSETS_DIR / "fonts/PTSansCaption-Bold.ttf"
         self._font_upper_size = 64
         self._font_downer_size = 62
 
         self._font_upper = ImageFont.truetype(
-            self._font_path, size=self._font_upper_size
+            self._font_path.as_posix(), size=self._font_upper_size
         )
         self._font_downer = ImageFont.truetype(
-            self._font_path, size=self._font_downer_size
+            self._font_path.as_posix(), size=self._font_downer_size
         )
 
-        self._fill_upper = '#FFFFFF'
-        self._fill_downer = '#C6F1FF'
+        self._fill_upper = "#FFFFFF"
+        self._fill_downer = "#C6F1FF"
 
         self._width_line = 27
 
         self.image = None
-        self.image_path = None
         self.draw_text = None
         self.image_weight = None
         self.image_height = None
@@ -39,20 +37,22 @@ class MarksPictureHelper:
 
     def _get_image_by_grade(self, current_grade, max_grade):
         if current_grade == 0:
-            self.image = Image.open(assetsHelper.make_full_path('images/red.png'))
+            self.image = Image.open(config.ASSETS_DIR / "images/red.png")
         elif current_grade / max_grade < 0.5:
-            self.image = Image.open(assetsHelper.make_full_path('images/orange.png'))
+            self.image = Image.open(config.ASSETS_DIR / "images/orange.png")
         elif current_grade / max_grade < 0.7:
-            self.image = Image.open(assetsHelper.make_full_path('images/yellow.png'))
+            self.image = Image.open(config.ASSETS_DIR / "images/yellow.png")
         elif current_grade / max_grade < 0.85:
-            self.image = Image.open(assetsHelper.make_full_path('images/salt.png'))
+            self.image = Image.open(config.ASSETS_DIR / "images/salt.png")
         elif current_grade / max_grade >= 0.85:
-            self.image = Image.open(assetsHelper.make_full_path('images/green.png'))
+            self.image = Image.open(config.ASSETS_DIR / "images/green.png")
+        else:
+            raise AssertionError("unreachable")
         self.draw_text = ImageDraw.Draw(self.image)
         self.image_weight, self.image_height = self.image.size
 
     def _get_news_image(self):
-        self.image = Image.open(assetsHelper.make_full_path('images/news.png'))
+        self.image = Image.open(config.ASSETS_DIR / "images/news.png")
         self.draw_text = ImageDraw.Draw(self.image)
         self.image_weight, self.image_height = self.image.size
 
@@ -98,15 +98,15 @@ class MarksPictureHelper:
         self.container_height = container_height
 
     def _draw_qr(self, url, offset):
-        qr = qrcode.QRCode(
+        qr = QRCode(
             version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            error_correction=ERROR_CORRECT_L,
             box_size=5,
             border=1,
         )
         qr.add_data(url)
         qr.make(fit=True)
-        img = qr.make_image(fill_color='#008CBA', back_color='white')
+        img = qr.make_image(fill_color="#008CBA", back_color="white")
         self.image.paste(img, ((self.image_weight - img.pixel_size) // 2, int(offset)))
 
     def _draw_text(self, text, font, fill, offset, need_split=True):
@@ -176,10 +176,10 @@ class MarksPictureHelper:
         self._font_upper_size -= 1
         self._font_downer_size -= 1
         self._font_upper = ImageFont.truetype(
-            self._font_path, size=self._font_upper_size
+            self._font_path.as_posix(), size=self._font_upper_size
         )
         self._font_downer = ImageFont.truetype(
-            self._font_path, size=self._font_downer_size
+            self._font_path.as_posix(), size=self._font_downer_size
         )
         self._calculate_font_size_and_text_width(
             title_text,
@@ -188,16 +188,14 @@ class MarksPictureHelper:
             mark_change_text=mark_change_text,
         )
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback):
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
         if self.image:
             self.image.close()
 
-        if hasattr(self, 'image_path'):
-            CommonHelper.safe_delete(path=self.image_path)
-
+    @weak_lru(maxsize=64)
     def get_image_marks(
         self,
         current_grade: float,
@@ -205,29 +203,34 @@ class MarksPictureHelper:
         title_text: str,
         mark_change_text: str,
         side_text: str,
-    ) -> pathlib.Path:
-        current_grade = 0 if current_grade == 'н' else current_grade
+    ) -> BytesIO:
+        img_byte_array = BytesIO()
+        current_grade = 0 if current_grade == "н" else current_grade
         max_grade = 1 if max_grade == 0 else max_grade
         self._get_image_by_grade(current_grade, max_grade)
+        assert self.image
+
         self._calculate_font_size_and_text_width(
             title_text, side_text, mark_change_text=mark_change_text
         )
         self._draw_text_marks(title_text, mark_change_text, side_text)
-        self.image_path = pathlib.Path(
-            os.path.join(config.BASEDIR, f'temp_{secrets.token_hex(15)}.png')
-        )
-        self.image.save(self.image_path)
-        return self.image_path
+        self.image.save(img_byte_array, format="PNG")
+        img_byte_array.seek(0)
+        return img_byte_array
 
-    def get_image_news(self, title_text: str, side_text: str, url: str) -> pathlib.Path:
-        self.image_path = pathlib.Path(
-            os.path.join(config.BASEDIR, f'temp_{secrets.token_hex(15)}.png')
-        )
+    @weak_lru(maxsize=64)
+    def get_image_news(self, title_text: str, side_text: str, url: str) -> BytesIO:
+        img_byte_array = BytesIO()
         self._get_news_image()
-        if title_text == '':
-            self.image.save(self.image_path)
-            return self.image_path
+        assert self.image
+
+        if title_text == "":
+            self.image.save(img_byte_array, format="PNG")
+            img_byte_array.seek(0)
+            return img_byte_array
+
         self._calculate_font_size_and_text_width(title_text, side_text, need_qr=True)
         self._draw_text_news(title_text, side_text, url)
-        self.image.save(self.image_path)
-        return self.image_path
+        self.image.save(img_byte_array, format="PNG")
+        img_byte_array.seek(0)
+        return img_byte_array

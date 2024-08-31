@@ -25,7 +25,7 @@ class BaseConsumer(ABC):
 
     @property
     @abstractmethod
-    def exceptions_to_requeue(self) -> tuple[Exception, ...]:
+    def exceptions_to_requeue(self) -> tuple[type[Exception], ...]:
         """Exceptions to requeue message."""
         pass
 

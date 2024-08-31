@@ -1,73 +1,60 @@
+import html
 import logging
+from contextlib import asynccontextmanager
+from datetime import datetime
+from io import BytesIO
 
 from aiogram.types import InputFile
 from aiogram.utils import markdown
 from aiogram.utils.exceptions import (
-    BotBlocked,
-    ChatNotFound,
-    UserDeactivated,
     Unauthorized,
-    RestartingTelegram,
-)
-import aiohttp
-from app import main, config
-from app.config import (
-    LOGIN_LOGOUT_SERVICE_URL_FOR_LOGOUT,
-    LOGIN_LOGOUT_SERVICE_HEADER_NAME,
-    LOGIN_LOGOUT_SERVICE_TOKEN,
 )
 
+from app import config, main
+from app.config import TIMEZONE
+from app.helpers.LoginLogoutHelper import LoginLogoutHelper
 
 logger = logging.getLogger(__name__)
 
 
-def make_logout_on_unauthorized_decorator(func: callable) -> callable:
-    async def wrapper(*args, **kwargs) -> callable:
-        try:
-            return await func(*args, **kwargs)
-        except Unauthorized as exception:
-            logger.error(
-                "Can't send message to user, trying to logout. Exception: %s", exception
-            )
-
-            async with aiohttp.ClientSession() as http_session:
-                logger.info(
-                    "Sending logout request to logout service for user %s",
-                    kwargs.get('user_telegram_id'),
-                )
-                url = LOGIN_LOGOUT_SERVICE_URL_FOR_LOGOUT.format(
-                    user_telegram_id=kwargs.get('user_telegram_id')
-                )
-                headers = {
-                    LOGIN_LOGOUT_SERVICE_HEADER_NAME: LOGIN_LOGOUT_SERVICE_TOKEN,
-                    "User-Agent": 'NotifyService',
-                }
-                response = await http_session.post(url, headers=headers)
-                response.raise_for_status()
-
-    return wrapper
+@asynccontextmanager
+async def make_logout_on_unauthorized(user_telegram_id: int):
+    try:
+        yield
+    except Unauthorized as exception:
+        logger.error(
+            "Can't send message to user, trying to logout. Exception: %s", exception
+        )
+        await LoginLogoutHelper.make_logout(user_telegram_id)
 
 
 class TelegramMessageHelper:
     @staticmethod
-    @make_logout_on_unauthorized_decorator
     async def text_message_to_user(user_telegram_id: int, message: str) -> None:
-        await main.bot.send_message(user_telegram_id, message)
+        async with make_logout_on_unauthorized(user_telegram_id):
+            await main.bot.send_message(user_telegram_id, message)
 
     @staticmethod
-    @make_logout_on_unauthorized_decorator
     async def photo_message_to_user(
-        user_telegram_id: int, photo_path: str, caption: str
+        user_telegram_id: int, image: BytesIO, caption: str
     ) -> None:
-        await main.bot.send_photo(user_telegram_id, InputFile(photo_path), caption)
+        async with make_logout_on_unauthorized(user_telegram_id):
+            await main.bot.send_photo(user_telegram_id, InputFile(image), caption)
 
     @staticmethod
-    async def message_to_admins(message: str) -> None:
+    async def message_to_admins(message: str, timestamp: datetime) -> None:
+        message_without_html = html.escape(message)
+        timestamp = timestamp.astimezone(TIMEZONE)
+
         await main.logs_bot.send_message(
             config.TELEGRAM_LOGS_CHAT_ID,
             markdown.text(
-                markdown.hbold('[ADMIN]'),
-                markdown.text(message),
-                sep=': ',
+                markdown.text(
+                    markdown.hbold("[ADMIN]"),
+                    markdown.text(message_without_html),
+                    sep=": ",
+                ),
+                markdown.hitalic(timestamp.strftime("%d.%m.%Y %H:%M:%S")),
+                sep="\n",
             ),
         )
